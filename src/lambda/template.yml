@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: Data Availability Timestamp for KAGR Analytics Dashboards.
+
+Globals:
+  #https://github.com/awslabs/serverless-application-model/blob/develop/docs/globals.rst
+  Function:
+    Runtime: python3.6
+    MemorySize: 512
+
+Parameters:
+  Environment:
+    Type: String
+
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: The VPC ID defined for the application
+
+  # Redis security group
+  SecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Security Group IDs that Lambda will use
+
+  VpcSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: VPC Subnet IDs that Lambda will use (min 2 for HA)
+
+
+Resources:
+  # create security groups
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda ENIs
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: LambdaSecurityGroup
+
+  # create IAM roles
+  # Will be assumed by LambdaRDSTest and LambdaRDSTestHarness Lambda functions
+  RDSLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: "AllowMetricAdd"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "cloudwatch:PutMetricData"
+                Resource: "*"
+        - PolicyName: "AllowInvoke"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "lambda:InvokeFunction"
+                Resource: "*"
+                  #- !GetAtt LambdaRDSManageConnections.Arn
+                  #- !GetAtt LambdaRDSTest.Arn
+        - PolicyName: "AllowSM"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "secretsmanager:*"
+                Resource: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+
+  ParseFilename:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: lambda_function.parse_filename
+      CodeUri: .
+      Description: >-
+        Returns a list of the keys associated in the database.
+      Timeout: 10
+      Events:
+        Api1:
+          Type: Api
+          Properties:
+            Path: /parse_filename
+            Method: GET
+            Auth:
+              ApiKeyRequired: true
+
+      Environment:
+        Variables:
+          Environment: !Ref Environment
+
+      # This seems to not always work.  Go into the UI on
+      Role: !GetAtt RDSLambdaRole.Arn
+
+      Policies:
+        - VPCAccessPolicy: {}
+        # This policy gives permission for Lambdas to create/manage ENIs
+        # SAM Policy templates you can use: https://github.com/awslabs/serverless-application-model/blob/develop/examples/2016-10-31/policy_templates/all_policy_templates.yaml
+      VpcConfig:
+        SecurityGroupIds: !Ref SecurityGroupIds
+        SubnetIds: !Ref VpcSubnetIds
