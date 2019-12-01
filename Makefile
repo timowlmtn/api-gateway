@@ -8,8 +8,8 @@ deploy:
 	    --capabilities CAPABILITY_NAMED_IAM
 
 deploy-lambda-layer:
-	aws lambda update-function-configuration --function-name ${STACK_NAME}${COLOR}-ParseFilename-18SUBXL65NMPJ \
-        --layers
+	aws lambda update-function-configuration --function-name ${STACK_NAME}${COLOR}-ParseFilename-${LAMBDA_ID} \
+        --layers arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:layer:api_layer:1
 
 test-api:
 	curl -H "X-API-KEY: ${X_API_KEY}" https://${API_ID}.execute-api.us-east-1.amazonaws.com/Prod/parse_filename?Path="api-gateway/tests/data/apple_health_tracking_201911231045steps.csv"

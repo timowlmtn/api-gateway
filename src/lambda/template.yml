@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
-Description: Data Availability Timestamp for KAGR Analytics Dashboards.
+Description: Template for a File Parsing Gateway
 
 Globals:
   #https://github.com/awslabs/serverless-application-model/blob/develop/docs/globals.rst
@@ -27,20 +27,7 @@ Parameters:
 
 
 Resources:
-  # create security groups
-  LambdaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Lambda ENIs
-      VpcId:
-        Ref: VPC
-      Tags:
-      - Key: Name
-        Value: LambdaSecurityGroup
-
-  # create IAM roles
-  # Will be assumed by LambdaRDSTest and LambdaRDSTestHarness Lambda functions
-  RDSLambdaRole:
+  DefaultLambdaRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
@@ -67,15 +54,6 @@ Resources:
               - Effect: "Allow"
                 Action: "lambda:InvokeFunction"
                 Resource: "*"
-                  #- !GetAtt LambdaRDSManageConnections.Arn
-                  #- !GetAtt LambdaRDSTest.Arn
-        - PolicyName: "AllowSM"
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: "Allow"
-                Action: "secretsmanager:*"
-                Resource: "*"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
@@ -86,7 +64,7 @@ Resources:
       Handler: lambda_function.parse_filename
       CodeUri: .
       Description: >-
-        Returns a list of the keys associated in the database.
+        Parses a file path and returns a JSON object with the specified values.
       Timeout: 10
       Events:
         Api1:
@@ -101,8 +79,7 @@ Resources:
         Variables:
           Environment: !Ref Environment
 
-      # This seems to not always work.  Go into the UI on
-      Role: !GetAtt RDSLambdaRole.Arn
+      Role: !GetAtt DefaultLambdaRole.Arn
 
       Policies:
         - VPCAccessPolicy: {}
